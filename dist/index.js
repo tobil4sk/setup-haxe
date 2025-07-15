@@ -149,12 +149,12 @@ class Asset {
         return found ? toolRoot : null;
     }
 }
-// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.4.0-linux64.tar.gz
-// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.4.0-osx-universal.tar.gz
-// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.4.0-win64.zip
+// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.3.0-linux64.tar.gz
+// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.3.0-osx-universal.tar.gz
+// * NOTE https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.3.0-win64.zip
 class NekoAsset extends Asset {
     static resolveFromHaxeVersion(version) {
-        const nekoVer = version.startsWith('3.') ? '2.1.0' : '2.4.0'; // Haxe 3 only supports neko 2.1
+        const nekoVer = version.startsWith('3.') ? '2.1.0' : '2.3.0'; // Haxe 3 only supports neko 2.1
         return new NekoAsset(nekoVer);
     }
     constructor(version, env = new Env()) {
@@ -169,7 +169,7 @@ class NekoAsset extends Asset {
         if (this.env.platform === 'win' && this.version.startsWith('2.1')) {
             return this.env.platform;
         }
-        if (this.env.platform === 'osx' && this.version.startsWith('2.4')) {
+        if (this.env.platform === 'osx' && this.version.startsWith('2.3')) {
             return 'osx-universal';
         }
         return `${this.env.platform}${this.env.arch}`;
