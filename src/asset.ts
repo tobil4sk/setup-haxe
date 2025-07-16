@@ -114,6 +114,8 @@ export class NekoAsset extends Asset {
   }
 
   get downloadUrl() {
+    return `https://build.haxe.org/builds/neko/linux64/neko_2024-07-02_master_7f280c5.tar.gz`
+
     const tag = `v${this.version.replace(/\./g, '-')}`;
     return super.makeDownloadUrl(
       `/neko/releases/download/${tag}/${this.fileNameWithoutExt}${this.fileExt}`,
