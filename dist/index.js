@@ -161,7 +161,7 @@ class NekoAsset extends Asset {
         super('neko', version, env);
     }
     get downloadUrl() {
-        return `https://build.haxe.org/builds/neko/linux64/neko_2024-07-03_master_31e9db6.tar.gz`;
+        return `https://build.haxe.org/builds/neko/linux64/neko_2024-07-04_master_ba49f62.tar.gz`;
         const tag = `v${this.version.replace(/\./g, '-')}`;
         return super.makeDownloadUrl(`/neko/releases/download/${tag}/${this.fileNameWithoutExt}${this.fileExt}`);
     }
