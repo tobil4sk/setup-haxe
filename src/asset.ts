@@ -34,13 +34,6 @@ interface ResolveInput {
 export function resolveTarget(input: ResolveInput): Resolution {
   const { tool, platform, arch } = input;
 
-  if (platform === 'win32' && arch === 'arm64') {
-    return {
-      kind: 'unsupported',
-      reason: 'Windows ARM64 is not supported (no upstream Haxe/Neko archives).',
-    };
-  }
-
   if (platform !== 'darwin' && platform !== 'linux' && platform !== 'win32') {
     return { kind: 'unsupported', reason: `${platform} is not supported.` };
   }
@@ -168,6 +161,10 @@ function resolveNeko(input: {
   }
 }
 
+function isWindowsArm(): boolean {
+  return os.platform() === 'win32' && os.arch() === 'arm64';
+}
+
 abstract class Asset {
   constructor(
     readonly name: string,
@@ -177,6 +174,11 @@ abstract class Asset {
 
   async setup() {
     const toolPath = tc.find(this.name, this.version);
+
+    if (isWindowsArm()) {
+      core.info('Windows ARM64 has no upstream Haxe/Neko archives, falling back to x86 emulation.');
+    }
+
     if (toolPath) {
       return toolPath;
     }
@@ -288,14 +290,16 @@ abstract class Asset {
 
 export class NekoAsset extends Asset {
   static resolveFromHaxeVersion(version: string, nightly: boolean) {
+    // NOTE: Haxe 3 on Windows has 32-bit haxelib, which requires 32-bit Neko.
+    const forceArch =
+      version.startsWith('3.') && os.platform() === 'win32' ? 'ia32' : isWindowsArm() ? 'x64' : undefined;
+
     if (nightly) {
-      return new NekoAsset('latest', true);
+      return new NekoAsset('latest', true, forceArch);
     }
 
     // NOTE: Haxe older than 4.3 has known issues with mbedtls 3 in Neko 2.4.
     const nekoVer = version.startsWith('3.') || (version.startsWith('4.') && version < '4.3.') ? '2.3.0' : '2.4.0';
-    // NOTE: Haxe 3 on Windows has 32-bit haxelib, which requires 32-bit Neko.
-    const forceArch = version.startsWith('3.') && os.platform() === 'win32' ? 'ia32' : undefined;
 
     return new NekoAsset(nekoVer, false, forceArch);
   }
@@ -348,7 +352,9 @@ export class HaxeAsset extends Asset {
     version: string,
     protected readonly nightly: boolean,
   ) {
-    super('haxe', version, version.startsWith('3.') && os.platform() === 'win32' ? 'ia32' : undefined);
+    const forceArch =
+      version.startsWith('3.') && os.platform() === 'win32' ? 'ia32' : isWindowsArm() ? 'x64' : undefined;
+    super('haxe', version, forceArch);
   }
 
   get cachePlatform() {
