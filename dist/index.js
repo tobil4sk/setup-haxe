@@ -4056,21 +4056,20 @@ function resolveTarget(input) {
     if (platform !== 'darwin' && platform !== 'linux' && platform !== 'win32') {
         return { kind: 'unsupported', reason: `${platform} is not supported.` };
     }
-    if (arch !== 'x64' && arch !== 'arm64') {
+    if (arch !== 'x64' && arch !== 'arm64' && arch !== 'ia32') {
         return { kind: 'unsupported', reason: `${arch} is not supported.` };
     }
     return tool === 'haxe'
-        ? resolveHaxe({ version: input.version, platform, arch, nightly: input.nightly })
+        ? resolveHaxe({ platform, arch, nightly: input.nightly })
         : resolveNeko({
             version: input.version,
             platform,
             arch,
             nightly: input.nightly,
-            force32: input.force32,
         });
 }
 function resolveHaxe(input) {
-    const { version, platform, arch, nightly } = input;
+    const { platform, arch, nightly } = input;
     if (nightly) {
         switch (platform) {
             case 'darwin': {
@@ -4100,7 +4099,7 @@ function resolveHaxe(input) {
             return { kind: 'stable', cachePlatform: 'linux64', archiveTarget: 'linux64' };
         }
         case 'win32': {
-            if (version.startsWith('3.')) {
+            if (arch === 'ia32') {
                 return { kind: 'stable', cachePlatform: 'win', archiveTarget: 'win' };
             }
             return { kind: 'stable', cachePlatform: 'win64', archiveTarget: 'win64' };
@@ -4108,7 +4107,7 @@ function resolveHaxe(input) {
     }
 }
 function resolveNeko(input) {
-    const { version, platform, arch, nightly, force32 } = input;
+    const { version, platform, arch, nightly } = input;
     if (nightly) {
         switch (platform) {
             case 'darwin': {
@@ -4143,7 +4142,7 @@ function resolveNeko(input) {
             return { kind: 'stable', cachePlatform: 'linux64', archiveTarget: 'linux64' };
         }
         case 'win32': {
-            if (force32) {
+            if (arch === 'ia32') {
                 return { kind: 'stable', cachePlatform: 'win', archiveTarget: 'win' };
             }
             return { kind: 'stable', cachePlatform: 'win64', archiveTarget: 'win64' };
@@ -4153,9 +4152,11 @@ function resolveNeko(input) {
 class Asset {
     name;
     version;
-    constructor(name, version) {
+    forceArch;
+    constructor(name, version, forceArch) {
         this.name = name;
         this.version = version;
+        this.forceArch = forceArch;
     }
     async setup() {
         const toolPath = find(this.name, this.version);
@@ -4170,14 +4171,13 @@ class Asset {
     get fileExt() {
         return external_node_os_namespaceObject.platform() === 'win32' ? '.zip' : '.tar.gz';
     }
-    resolve(tool, force32 = false) {
+    resolve(tool) {
         return resolveTarget({
             tool,
             version: this.version,
             platform: external_node_os_namespaceObject.platform(),
-            arch: external_node_os_namespaceObject.arch(),
+            arch: this.forceArch ?? external_node_os_namespaceObject.arch(),
             nightly: this.isNightly,
-            force32,
         });
     }
     get isNightly() {
@@ -4247,30 +4247,28 @@ class Asset {
 }
 class NekoAsset extends Asset {
     nightly;
-    force32;
     static resolveFromHaxeVersion(version, nightly) {
         if (nightly) {
-            return new NekoAsset('latest', true, false);
+            return new NekoAsset('latest', true);
         }
         // NOTE: Haxe older than 4.3 has known issues with mbedtls 3 in Neko 2.4.
         const nekoVer = version.startsWith('3.') || (version.startsWith('4.') && version < '4.3.') ? '2.3.0' : '2.4.0';
         // NOTE: Haxe 3 on Windows has 32-bit haxelib, which requires 32-bit Neko.
-        const force32 = version.startsWith('3.') && external_node_os_namespaceObject.platform() === 'win32';
-        return new NekoAsset(nekoVer, false, force32);
+        const forceArch = version.startsWith('3.') && external_node_os_namespaceObject.platform() === 'win32' ? 'ia32' : undefined;
+        return new NekoAsset(nekoVer, false, forceArch);
     }
-    constructor(version, nightly, force32) {
-        super('neko', version);
+    constructor(version, nightly, forceArch) {
+        super('neko', version, forceArch);
         this.nightly = nightly;
-        this.force32 = force32;
     }
     get cachePlatform() {
-        return this.requireSupported(this.resolve('neko', this.force32)).cachePlatform;
+        return this.requireSupported(this.resolve('neko')).cachePlatform;
     }
     // NOTE: example URLs built below (tag uses '-' as separator, e.g. 2.4.0 -> v2-4-0).
     //   stable:  https://github.com/HaxeFoundation/neko/releases/download/v2-4-0/neko-2.4.0-linux64.tar.gz
     //   nightly: https://build.haxe.org/builds/neko/mac-universal/neko_latest.tar.gz
     get downloadUrl() {
-        const resolution = this.requireSupported(this.resolve('neko', this.force32));
+        const resolution = this.requireSupported(this.resolve('neko'));
         if (resolution.kind === 'nightly') {
             return `https://build.haxe.org/builds/neko/${resolution.nightlyPathSegment}/${this.fileNameWithoutExt}${this.fileExt}`;
         }
@@ -4278,7 +4276,7 @@ class NekoAsset extends Asset {
         return super.makeDownloadUrl(`/neko/releases/download/${tag}/${this.fileNameWithoutExt}${this.fileExt}`);
     }
     get fileNameWithoutExt() {
-        const resolution = this.requireSupported(this.resolve('neko', this.force32));
+        const resolution = this.requireSupported(this.resolve('neko'));
         if (resolution.kind === 'nightly') {
             return `neko_${this.version}`;
         }
@@ -4294,7 +4292,7 @@ class NekoAsset extends Asset {
 class HaxeAsset extends Asset {
     nightly;
     constructor(version, nightly) {
-        super('haxe', version);
+        super('haxe', version, version.startsWith('3.') && external_node_os_namespaceObject.platform() === 'win32' ? 'ia32' : undefined);
         this.nightly = nightly;
     }
     get cachePlatform() {
